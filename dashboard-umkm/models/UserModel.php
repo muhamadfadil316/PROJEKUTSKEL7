@@ -45,4 +45,14 @@ class UserModel
             return ['success' => false, 'message' => 'Terjadi kesalahan saat mendaftar'];
         }
     }
+
+    // ✅ Tambahan fungsi getById
+    public function getById($id)
+    {
+        $stmt = $this->conn->prepare("SELECT * FROM user WHERE id = :id");
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
 }

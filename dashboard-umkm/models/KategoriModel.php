@@ -79,4 +79,14 @@ class KategoriModel {
         
         return array_slice($categories, 0, $count);
     }
+    /**
+ * Get all categories from the database
+ * @return array List of all categories
+ */
+public function getAllKategori() {
+    $stmt = $this->conn->prepare("SELECT * FROM kategori_umkm ORDER BY nama ASC");
+    $stmt->execute();
+    return $stmt->fetchAll();
+}
+
 }

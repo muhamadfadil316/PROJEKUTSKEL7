@@ -1,46 +1,55 @@
 <?php
 class UmkmModel {
+
+
     private $conn;
-    
+
     public function __construct($conn) {
         $this->conn = $conn;
     }
-    
-    /**
-     * Count total number of UMKM entries
-     * @return int Total count
-     */
+
+    public function getUmkmById($id) {
+        $stmt = $this->conn->prepare("SELECT * FROM umkm WHERE id = ?");
+        $stmt->execute([$id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    public function updateUmkm($id, $nama, $kategori, $pemilik, $lokasi, $kontak, $status) {
+        $stmt = $this->conn->prepare("UPDATE umkm SET nama = :nama, kategori = :kategori, pemilik = :pemilik, lokasi = :lokasi, kontak = :kontak, status = :status WHERE id = :id");
+        $stmt->bindParam(':nama', $nama);
+        $stmt->bindParam(':kategori', $kategori);
+        $stmt->bindParam(':pemilik', $pemilik);
+        $stmt->bindParam(':lokasi', $lokasi);
+        $stmt->bindParam(':kontak', $kontak);
+        $stmt->bindParam(':status', $status);
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+        return $stmt->execute();
+    }
+
+    public function deleteUmkm($id) {
+        $stmt = $this->conn->prepare("DELETE FROM umkm WHERE id = :id");
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+        return $stmt->execute();
+    }
+
     public function countAll() {
         $stmt = $this->conn->prepare("SELECT COUNT(*) FROM umkm");
         $stmt->execute();
         return $stmt->fetchColumn();
     }
-    
-    /**
-     * Count unique UMKM owners
-     * @return int Count of unique owners
-     */
+
     public function countUniquePemilik() {
         $stmt = $this->conn->prepare("SELECT COUNT(DISTINCT pemilik) FROM umkm");
         $stmt->execute();
         return $stmt->fetchColumn();
     }
-    
-    /**
-     * Calculate total modal of all UMKM
-     * @return float Total modal amount
-     */
+
     public function calculateTotalModal() {
         $stmt = $this->conn->prepare("SELECT SUM(modal) FROM umkm");
         $stmt->execute();
         return $stmt->fetchColumn() ?: 0;
     }
-    
-    /**
-     * Get latest UMKM entries with category and location data
-     * @param int $limit Number of entries to fetch
-     * @return array Latest UMKM data
-     */
+
     public function getLatestUmkm($limit = 6) {
         $query = "
             SELECT 
@@ -59,81 +68,119 @@ class UmkmModel {
             LEFT JOIN kabkota kk ON u.kabkota_id = kk.id
             LEFT JOIN provinsi p ON kk.provinsi_id = p.id
             ORDER BY u.id DESC
-            LIMIT :limit
-        ";
-        
+            LIMIT :limit";
+       
         $stmt = $this->conn->prepare($query);
         $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
-        
-        $results = $stmt->fetchAll();
-        
-        // If no results or missing joins, use mock data
-        if (empty($results)) {
-            return $this->getMockUmkmData($limit);
-        }
-        
-        return $results;
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+    public function getFilteredUmkm($search, $kategori, $lokasi, $page, $perPage) {
+        $offset = ($page - 1) * $perPage;
+        $params = [];
+        $conditions = [];
     
-    /**
-     * Get UMKM data by ID
-     * @param int $id UMKM ID
-     * @return array|bool UMKM data or false if not found
-     */
-    public function getById($id) {
+        if (!empty($search)) {
+            $conditions[] = "(u.nama LIKE :search OR u.pemilik LIKE :search)";
+            $params[':search'] = '%' . $search . '%';
+        }
+    
+        if (!empty($kategori)) {
+            $conditions[] = "u.kategori_umkm_id = :kategori";
+            $params[':kategori'] = $kategori;
+        }
+    
+        if (!empty($lokasi)) {
+            $conditions[] = "u.kabkota_id = :lokasi";
+            $params[':lokasi'] = $lokasi;
+        }
+    
+        $whereClause = count($conditions) > 0 ? "WHERE " . implode(" AND ", $conditions) : "";
+    
         $query = "
-            SELECT 
-                u.id,
-                u.nama,
-                u.modal,
-                u.pemilik,
-                u.alamat,
-                u.website,
-                u.email,
-                u.rating,
-                k.nama AS kategori,
-                kk.nama AS kota,
-                p.nama AS provinsi
+            SELECT u.id, u.nama, u.pemilik,
+                   k.nama AS kategori_nama, kk.nama AS lokasi_nama
             FROM umkm u
             LEFT JOIN kategori_umkm k ON u.kategori_umkm_id = k.id
             LEFT JOIN kabkota kk ON u.kabkota_id = kk.id
-            LEFT JOIN provinsi p ON kk.provinsi_id = p.id
-            WHERE u.id = :id
+            $whereClause
+            ORDER BY u.nama ASC
+            LIMIT :limit OFFSET :offset
         ";
-        
-        $stmt = $this->conn->prepare($query);
-        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
-        $stmt->execute();
-        
-        return $stmt->fetch();
-    }
     
-    /**
-     * Generate mock UMKM data if database is empty
-     * @param int $count Number of mock entries
-     * @return array Mock UMKM data
-     */
-    private function getMockUmkmData($count = 3) {
-        $mockData = [];
-        $categories = ['Kuliner', 'Fashion', 'Kerajinan', 'Teknologi', 'Agribisnis'];
-        $locations = ['Jakarta Selatan, DKI Jakarta', 'Bandung, Jawa Barat', 'Surabaya, Jawa Timur', 'Medan, Sumatera Utara'];
-        
-        for ($i = 1; $i <= $count; $i++) {
-            $mockData[] = [
-                'id' => $i,
-                'nama' => 'UMKM ' . $i,
-                'modal' => rand(5000000, 50000000),
-                'pemilik' => 'Pemilik ' . $i,
-                'alamat' => 'Jl. Contoh No. ' . $i,
-                'website' => 'www.umkm' . $i . '.com',
-                'email' => 'kontak@umkm' . $i . '.com',
-                'rating' => rand(3, 5),
-                'kategori' => $categories[array_rand($categories)],
-                'lokasi' => $locations[array_rand($locations)]
-            ];
+        $stmt = $this->conn->prepare($query);
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
         }
-        
-        return $mockData;
+        $stmt->bindValue(':limit', (int)$perPage, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
+    public function countFilteredUmkm($search, $kategori, $lokasi) {
+        $params = [];
+        $conditions = [];
+    
+        if (!empty($search)) {
+            $conditions[] = "(nama LIKE :search OR pemilik LIKE :search)";
+            $params[':search'] = '%' . $search . '%';
+        }
+    
+        if (!empty($kategori)) {
+            $conditions[] = "kategori_umkm_id = :kategori";
+            $params[':kategori'] = $kategori;
+        }
+    
+        if (!empty($lokasi)) {
+            $conditions[] = "kabkota_id = :lokasi";
+            $params[':lokasi'] = $lokasi;
+        }
+    
+        $whereClause = count($conditions) > 0 ? "WHERE " . implode(" AND ", $conditions) : "";
+    
+        $query = "SELECT COUNT(*) FROM umkm $whereClause";
+    
+        $stmt = $this->conn->prepare($query);
+        foreach ($params as $key => $value) {
+            $stmt->bindValue($key, $value);
+        }
+        $stmt->execute();
+        return $stmt->fetchColumn();
+    }
+       
+
+    // Insert new UMKM
+    public function createUmkm($nama, $kategori, $pemilik, $lokasi, $kontak, $status) {
+        $stmt = $this->conn->prepare("
+            INSERT INTO umkm (nama, kategori, pemilik, lokasi, kontak, status)
+            VALUES (:nama, :kategori, :pemilik, :lokasi, :kontak, :status)
+        ");
+        $stmt->bindParam(':nama', $nama);
+        $stmt->bindParam(':kategori', $kategori);
+        $stmt->bindParam(':pemilik', $pemilik);
+        $stmt->bindParam(':lokasi', $lokasi);
+        $stmt->bindParam(':kontak', $kontak);
+        $stmt->bindParam(':status', $status);
+        return $stmt->execute();
+    }
+
+    
+
+    // Get all UMKM
+    public function getAllUmkm() {
+        $stmt = $this->conn->query("SELECT * FROM umkm ORDER BY id DESC");
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    // Optional: Search UMKM
+    public function searchUmkm($keyword) {
+        $stmt = $this->conn->prepare("
+            SELECT * FROM umkm 
+            WHERE nama LIKE :keyword OR pemilik LIKE :keyword 
+            ORDER BY id DESC
+        ");
+        $stmt->execute([':keyword' => "%$keyword%"]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
 }

@@ -76,4 +76,38 @@ class LocationModel {
             ['id' => 5, 'nama' => 'Sumatera Utara', 'ibukota' => 'Medan', 'latitude' => 3.5952, 'longitude' => 98.6722]
         ];
     }
+    /**
+ * Get all kabupaten/kota with their corresponding province names
+ * @return array All location data
+ */
+public function getAllLokasi() {
+    $query = "
+        SELECT 
+            k.id,
+            k.nama AS nama,
+            p.nama AS provinsi
+        FROM kabkota k
+        JOIN provinsi p ON k.provinsi_id = p.id
+        ORDER BY k.nama
+    ";
+    
+    $stmt = $this->conn->prepare($query);
+    $stmt->execute();
+    
+    $results = $stmt->fetchAll();
+
+    // Optional: return mock if empty
+    if (empty($results)) {
+        return [
+            ['id' => 1, 'nama' => 'Jakarta', 'provinsi' => 'DKI Jakarta'],
+            ['id' => 2, 'nama' => 'Bandung', 'provinsi' => 'Jawa Barat'],
+            ['id' => 3, 'nama' => 'Surabaya', 'provinsi' => 'Jawa Timur'],
+            ['id' => 4, 'nama' => 'Semarang', 'provinsi' => 'Jawa Tengah'],
+            ['id' => 5, 'nama' => 'Medan', 'provinsi' => 'Sumatera Utara'],
+        ];
+    }
+
+    return $results;
+}
+
 }
